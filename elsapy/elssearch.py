@@ -8,6 +8,7 @@ from . import log_util
 
 logger = log_util.get_logger(__name__)
 
+
 class ElsSearch():
     """Represents a search to one of the search indexes accessible
          through api.elsevier.com. Returns True if successful; else, False."""
@@ -15,11 +16,15 @@ class ElsSearch():
     # static variables
     __base_url = u'https://api.elsevier.com/content/search/'
 
-    def __init__(self, query, index):
+    def __init__(self, query, index, view="COMPLETE", results_per_query=25,maxResults=5000):
         """Initializes a search object with a query and target index."""
         self.query = query
         self.index = index
-        self._uri = self.__base_url + self.index + '?query=' + self.query
+        self.view = view
+        self.maxResults = maxResults
+        self.results_per_query = results_per_query
+        self._uri = self.__base_url + self.index + '?view=' + self.view + '&query=' + self.query + "&count=" + str(
+            self.results_per_query)
 
     # properties
     @property
@@ -66,7 +71,7 @@ class ElsSearch():
         """Gets the request uri for the search"""
         return self._uri
 
-    def execute(self, els_client = None, get_all = False):
+    def execute(self, els_client=None, get_all=False):
         """Executes the search. If get_all = False (default), this retrieves
             the default number of results specified for the API. If
             get_all = True, multiple API calls will be made to iteratively get 
@@ -76,12 +81,15 @@ class ElsSearch():
         self._tot_num_res = int(api_response['search-results']['opensearch:totalResults'])
         self._results = api_response['search-results']['entry']
         if get_all is True:
-            while (self.num_res < self.tot_num_res) and (self.num_res < 5000):
+            while (self.num_res < self.tot_num_res) and (self.num_res < self.maxResults):
+                print("%i / %i" % (self.num_res , self.tot_num_res))
                 for e in api_response['search-results']['link']:
                     if e['@ref'] == 'next':
                         next_url = e['@href']
+                        if ("&view=" + self.view) not in next_url:
+                            next_url += ("&view=" + self.view)
                 api_response = els_client.exec_request(next_url)
-                self._results += api_response['search-results']['entry']         
+                self._results += api_response['search-results']['entry']
 
     def hasAllResults(self):
         """Returns true if the search object has retrieved all results for the
